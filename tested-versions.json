@@ -69,6 +69,14 @@
       "runtime": "0.0.30/20261014203459-0849368674e2",
       "lcu_version": "0.11.8",
       "evidence": "docs/verification/macos-chatgpt-26.1013-2026-10-21.md"
+    },
+    {
+      "platform": "windows",
+      "architecture": "x64",
+      "app_version": "26.1111.2228.0",
+      "runtime": "local",
+      "lcu_version": "0.13.8",
+      "evidence": "docs/verification/windows-store-2026-11-17.md"
     }
   ]
 }

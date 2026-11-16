@@ -97,8 +97,9 @@ Install [the official ChatGPT desktop app](https://chatgpt.com/download/) and yo
 | --- | --- |
 | Linux ARM64 or x86-64 | Ubuntu 24.04-compatible glibc system, an active X11 desktop, and D-Bus |
 | macOS on Apple Silicon | The signed ChatGPT app, with Accessibility and screen-recording permissions approved during first use |
+| Windows 11 x64 preview | The official Codex Store app and an interactive Windows desktop session |
 
-Windows 11 x64 remains a [candidate](docs/INSTALLATION.md#windows-11-x64-candidate-deferred-from-this-delivery). Intel Macs, native Wayland, and musl Linux are unsupported. See [verification and limits](docs/PARITY-STATUS.md) for tested behavior.
+Build the [Windows preview ZIP](docs/INSTALLATION.md#windows-11-x64-preview) from source. Intel Macs, native Wayland, and musl Linux are unsupported. See [verification and limits](docs/PARITY-STATUS.md) for tested behavior.
 
 ## Install manually
 

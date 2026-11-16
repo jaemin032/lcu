@@ -1,6 +1,6 @@
 'use strict';
 // Structural analysis of the installed app's minified main bundle, run by
-// lcu/windows_host.py with the Node that LCU already uses for the Windows host.
+// lcu/windows_host.mjs with the Node that LCU already uses for the Windows host.
 // It parses with the vendored acorn parser (lcu/vendor/acorn) and never executes,
 // evaluates or rewrites app code: the generated module is a verbatim selection of
 // the bundle's own top-level declarations, in their original order.
@@ -387,17 +387,57 @@ function listRequires(files) {
   return {ok: true, files: result};
 }
 
-function isFactory(node) {
-  if (node.type !== 'FunctionDeclaration' || !node.id || node.params.length === 0) return false;
+function propertyName(property) {
+  if (property.type !== 'Property' || property.computed) return null;
+  return property.key.type === 'Identifier' ? property.key.name : staticString(property.key);
+}
+
+function hasFactoryOptions(node) {
   const first = node.params[0];
-  if (first.type !== 'ObjectPattern') return false;
-  const keys = new Set();
-  for (const p of first.properties) {
-    if (p.type !== 'Property' || p.computed) continue;
-    if (p.key.type === 'Identifier') keys.add(p.key.name);
-    else if (p.key.type === 'Literal') keys.add(String(p.key.value));
-  }
+  if (first?.type !== 'ObjectPattern') return false;
+  const keys = new Set(first.properties.map(propertyName));
   return FACTORY_OPTIONS.every(name => keys.has(name));
+}
+
+// The Electron startup function immediately calls its host wrapper with path and analytics options.
+// The wrapper's default startServer is the original pipe host. Only that default travels with LCU.
+function nestedFactories(startup) {
+  const factories = [];
+  for (const statement of startup.body.body) {
+    if (statement.type !== 'VariableDeclaration') continue;
+    for (const {init} of statement.declarations) {
+      if (init?.type !== 'CallExpression' || init.callee.type !== 'FunctionExpression') continue;
+      const wrapper = init.callee;
+      const options = wrapper.params[0];
+      const [supplied] = init.arguments;
+      if (options?.type !== 'ObjectPattern' || supplied?.type !== 'ObjectExpression' ||
+          supplied.properties.some(property => [null, 'startServer'].includes(propertyName(property)))) continue;
+      for (const property of options.properties) {
+        if (propertyName(property) !== 'startServer' || property.value.type !== 'AssignmentPattern') continue;
+        const node = property.value.right;
+        if (node.type !== 'FunctionExpression' || !hasFactoryOptions(node)) continue;
+        const last = node.body.body.at(-1);
+        const result = last?.type === 'ReturnStatement' ? last.argument : null;
+        if (result?.type !== 'ObjectExpression') continue;
+        const keys = new Set(result.properties.map(propertyName));
+        if (!['pipePath', 'closeActiveTurn', 'hasActiveTurn', 'dispose'].every(key => keys.has(key))) continue;
+        // A default can see the wrapper's parameters and the enclosing startup scope. Refuse those captures
+        // since the generated module runs in module scope. The wrapper's body bindings are out of scope here.
+        const enclosing = new Set([...hoistedNames(startup.body.body), startup.id.name, wrapper.id?.name]);
+        for (const parameter of [...startup.params, ...wrapper.params]) {
+          for (const name of patternNames(parameter, [])) enclosing.add(name);
+        }
+        factories.push({node, enclosing, strict: startup.body.body[0]?.directive === 'use strict'});
+      }
+    }
+  }
+  return factories;
+}
+
+function hostFactories(statements, bundled = false) {
+  const declarations = statements.filter(statement => statement.type === 'FunctionDeclaration' && statement.id);
+  return [...declarations.filter(hasFactoryOptions).map(node => ({node})),
+    ...(bundled ? declarations.flatMap(nestedFactories) : [])];
 }
 
 // A top-level statement made only of assignments to (or updates of) bindings or property
@@ -428,7 +468,7 @@ function isRequireCall(node) {
     node.arguments.length === 1 && staticString(node.arguments[0]) !== null;
 }
 
-function entriesOf(program, webpackRequire) {
+function entriesOf(program, webpackRequire, factory) {
   const entries = [];
   const newScan = () => Object.assign(new Scan(), {webpackRequire});
   const add = (entry, scan) => {
@@ -460,6 +500,11 @@ function entriesOf(program, webpackRequire) {
       const roots = initializerRoots(statement);
       add({kind: roots ? 'assign' : 'other', names: roots || [], node: statement}, scan);
     }
+  }
+  if (factory.type === 'FunctionExpression') {
+    const scan = newScan();
+    scan.visit(factory);
+    add({kind: 'factory', names: [], node: factory}, scan);
   }
   return entries;
 }
@@ -520,10 +565,10 @@ function moduleTables(program) {
 // stay undeclared, so needing one is an unresolved identifier and stops the install.
 function webpackHost(program, source) {
   const holders = moduleTables(program).flatMap(table => table.properties.map(property => property.value))
-    .filter(fn => fn.body.type === 'BlockStatement' && fn.body.body.some(isFactory));
-  const factories = holders.flatMap(fn => fn.body.body.filter(isFactory));
-  if (factories.length !== 1) return {ok: true, matches: factories.length};
-  const [fn] = holders;
+    .filter(fn => fn.body.type === 'BlockStatement');
+  const matches = holders.flatMap(fn => hostFactories(fn.body.body, true).map(() => fn));
+  if (matches.length !== 1) return {ok: true, matches: matches.length};
+  const [fn] = matches;
   const parameter = fn.params[2];
   if (parameter?.type !== 'Identifier') throw new Unsupported('the webpack module of the native-pipe host has no require parameter');
   const strict = [program.body[0], fn.body.body[0]].some(item => item?.directive === 'use strict') ? '"use strict";' : '';
@@ -533,17 +578,24 @@ function webpackHost(program, source) {
 
 function hostModule(source, webpackRequire = null) {
   const program = parse(source);
-  const matches = program.body.filter(isFactory);
+  const matches = hostFactories(program.body, webpackRequire !== null);
   if (!matches.length && webpackRequire === null) return webpackHost(program, source);
   if (matches.length !== 1) return {ok: true, matches: matches.length};
-  const factory = matches[0];
+  const {node: factory, enclosing, strict: inheritedStrict} = matches[0];
+  const strict = program.body[0]?.directive === 'use strict';
+  if (inheritedStrict && !strict) {
+    return {ok: false, error: 'startServer is strict in a non-strict module'};
+  }
   const factorySource = source.slice(factory.start, factory.end);
   for (const marker of FACTORY_MARKERS) {
     if (!factorySource.includes(marker)) {
       return {ok: false, error: `the native-pipe host factory no longer exposes ${marker}`};
     }
   }
-  const entries = entriesOf(program, webpackRequire);
+  const entries = entriesOf(program, webpackRequire, factory);
+  const factoryEntry = entries.find(entry => entry.node === factory);
+  const captured = [...factoryEntry.free].filter(name => enclosing?.has(name));
+  if (captured.length) return {ok: false, error: `startServer captures startup bindings: ${captured.sort().join(', ')}`};
   const providers = new Map();
   for (const entry of entries) {
     if (entry.kind === 'assign' || entry.kind === 'other') continue;
@@ -562,7 +614,7 @@ function hostModule(source, webpackRequire = null) {
   }
 
   const included = new Set();
-  const queue = [entries.find(entry => entry.node === factory)];
+  const queue = [factoryEntry];
   included.add(queue[0]);
   const unresolved = new Set();
   const includedNames = new Set();
@@ -627,8 +679,6 @@ function hostModule(source, webpackRequire = null) {
   }
 
   const ordered = [...included].sort((a, b) => a.index - b.index);
-  const first = program.body[0];
-  const strict = first && first.type === 'ExpressionStatement' && first.directive === 'use strict';
   const pieces = ['// Generated by LCU from the installed app: verbatim top-level declarations the native-pipe',
     '// host factory depends on, in their original order. Not part of the LCU archive or Git.'];
   if (uncarried) {
@@ -640,15 +690,17 @@ function hostModule(source, webpackRequire = null) {
   for (const entry of ordered) {
     for (const spec of entry.requires) specs.add(spec);
     for (const spec of entry.imports) imports.add(spec);
-    let text = entry.kind === 'let' || entry.kind === 'const' || entry.kind === 'var'
-      ? `${entry.kind} ${source.slice(entry.node.start, entry.node.end)};`
-      : source.slice(entry.node.start, entry.node.end);
+    const original = source.slice(entry.node.start, entry.node.end);
+    let text = original;
+    if (['let', 'const', 'var'].includes(entry.kind)) text = `${entry.kind} ${original};`;
+    if (entry.kind === 'factory') text = `module.exports = (${original});`;
     if ((entry.kind === 'assign' || entry.kind === 'other') && !/[;}]$/.test(text)) text += ';';
     pieces.push(text);
   }
-  pieces.push(`module.exports = ${factory.id.name};`, '');
+  if (factory.type === 'FunctionDeclaration') pieces.push(`module.exports = ${factory.id.name};`);
+  pieces.push('');
   specs.delete(`./${WEBPACK_RUNTIME}`);
-  return {ok: true, matches: 1, factory: factory.id.name, uncarried, module: pieces.join('\n'),
+  return {ok: true, matches: 1, factory: factory.id?.name ?? 'startServer', uncarried, module: pieces.join('\n'),
     requires: [...specs].sort().map(classify), imports: [...imports].sort().map(classify),
     ...(webpackRequire === null ? {} : {webpack: {eager: moduleIds(ordered, 'eager'), lazy: moduleIds(ordered, 'lazy')}})};
 }

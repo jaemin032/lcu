@@ -353,6 +353,38 @@ test('a webpack build runs the host from its own module without starting the app
   assert.equal(derivedRuntime, members[WEBPACK_ENTRY].replace('var o=r(99);module.exports=o', 'r.e(1);r.e(2);module.exports=r;'));
 });
 
+test('webpack can reuse the default startServer without running the desktop wrapper', (t) => {
+  const f = fixture(t);
+  const host = `async function(${OPTIONS}) {
+    return {pipePath: nativePipeDirectory, closeActiveTurn: () => false, hasActiveTurn: () => false,
+      dispose() {}, probe: d.a + p.basename(windowsHelperPath) + LIMIT};
+  }`;
+  const bundle = (startup = '', supplied = '', factory = host) =>
+    `exports.ids=[1],exports.modules={51(e,t,r){const p=r(10),d=r(40),LIMIT=7;
+    function boot(${startup}) {
+      const server = (function({other, startServer=${factory}}) {
+        r(20).app.whenReady();
+        return startServer(other);
+      })({other: null${supplied}});
+      return server;
+    }
+    t.run = boot;
+    }};`;
+
+  const members = webpackMembers(bundle());
+  const plan = f.plan(members);
+  assert.equal(plan.factory, 'startServer');
+  assert.ok(plan.module.includes(`module.exports = (${host});`));
+  assert.ok(!plan.module.includes('whenReady'));
+  assert.equal(f.runFactory(f.extract(members)).probe, ':package:helper7');
+  assert.throws(() => f.plan(webpackMembers(bundle('LIMIT'))), /startServer captures startup bindings: LIMIT/);
+  assert.throws(() => f.plan(webpackMembers(bundle('', '', host.replace('probe: d.a', 'probe: other')))),
+    /startServer captures startup bindings: other/);
+  assert.throws(() => f.plan(webpackMembers(bundle('', ', startServer: custom'))), /no bundle .* has a native-pipe host factory/);
+  assert.throws(() => f.plan(webpackMembers(bundle().replace('function boot() {', 'function boot() { "use strict";'))),
+    /startServer is strict in a non-strict module/);
+});
+
 test('the factory is found by its content under any bundle name', (t) => {
   const f = fixture(t);
   const members = { [`${LOCATION}preload.js`]: 'not parsed {{{', [`${LOCATION}anything-h.js`]: `function Zed(${OPTIONS}) { return {closeActiveTurn(){},nativePipeDirectory}; }` };
