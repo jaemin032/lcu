@@ -36,4 +36,12 @@ The follow-up ZIP with SHA-256 `c9da485a109972a177c4dc16ba3be763967b62ce2580d40c
 
 With the same installed app and selected native surface, an MCP SDK client compared the Windows launcher with the app's own `cua-repl.mjs` running directly against the original pipe host. Their complete `tools/list` schema and descriptions, server initialization instructions, and first `cua.getState()` text result matched. The first call contained the original bundled Windows guide and confirmation policy. The comparison ran offline using the locally shipped backend and a local Windows account.
 
-Windows browser actions, real model calls, and the signed-in desktop app's approval UI are outside the guest test. See [parity status](../PARITY-STATUS.md).
+## External Chrome in the Windows 11 x64 guest
+
+The same installed LCU release also ran `lcu browser install` and `lcu --chrome` in the Hyper-V guest. The browser was Google's [Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/) `157.0.8103.78` x64 with a fresh guest profile. The test used OpenAI's [Chrome Web Store extension](https://chromewebstore.google.com/detail/chatgpt/hehggadaopoacecdllhhajmbjkdcmajg) `1.26.1102.11740`. The CRX3 signature and extension ID were verified before the extension was loaded unpacked with its original public key and unchanged executable files. Chrome started the original Windows `extension-host.exe` through the LCU relay.
+
+A scripted MCP SDK client used the original browser provider for two loopback test pages. It accepted only the origin `http://127.0.0.1:8787`, opened a tab, read the accessibility tree, typed a Unicode draft, clicked Save, and received the confirmation state and a screenshot. The local HTTP server independently received the exact draft. After the matching host `Stop` signal, the tab was absent from the original provider's tab list. The client declined the separate `http://127.0.0.1:8788` origin and that listener received no HTTP request.
+
+The successful save carried no `x-browser-agent` header. The bundled `chrome/scripts/browser-service.mjs` supports per-request managed headers with extensions advertising `requestHeadersVersion: 1`, which this extension does. The standalone test preserved the original policy. Launching `cua-repl.mjs` directly without the desktop's Windows pipe setup failed at browser discovery with `spawn EPERM`, so this run provides standalone browser evidence only.
+
+Real model calls and the signed-in desktop app's approval UI remain unverified. The guest's Windows account signed in automatically, and the bundled Codex CLI reported `Not logged in` for ChatGPT. See [parity status](../PARITY-STATUS.md).
