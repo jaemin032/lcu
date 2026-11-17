@@ -243,6 +243,7 @@ export function writeOriginalHost(plan, destination) {
   write('windows-pipe-host.cjs', entry);
   write('windows-lifetime-host.cjs', readFileSync(join(HERE, 'windows_lifetime_host.cjs')));
   write('windows-sky-service.mjs', readFileSync(join(HERE, 'windows_sky_service.mjs')));
+  write('windows-turn-transport.mjs', readFileSync(join(HERE, 'windows_turn_transport.mjs')));
   return join(destination, 'windows-pipe-host.cjs');
 }
 

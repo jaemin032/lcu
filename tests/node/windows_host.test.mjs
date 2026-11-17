@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { analyze, materializeOriginalHost, planOriginalHost, startOriginalHost, stopOriginalHost } from '../../lcu/windows_host.mjs';
+import { attachTurnCleanup, WindowsHelperTransport } from '../../lcu/windows_turn_transport.mjs';
 import { REPO, temporary, write, writeAsar } from './fixtures.mjs';
 
 const NODE = process.execPath;
@@ -119,6 +120,7 @@ test('an old self-contained layout extracts the unchanged host', (t) => {
   assert.ok(!launcher.includes('ORIGINAL_WINDOWS_PIPE_HOST') && launcher.includes('require("./.vite/build/lcu-original-pipe-host.cjs")'));
   assert.equal(f.runFactory(entry).probe, 'original:tslib:logger');
   assert.ok(existsSync(join(derived, 'windows-lifetime-host.cjs')) && existsSync(join(derived, 'windows-sky-service.mjs')));
+  assert.ok(existsSync(join(derived, 'windows-turn-transport.mjs')));
 });
 
 test('a split layout extracts a scope-correct closure and only reachable chunks', (t) => {
@@ -351,6 +353,57 @@ test('a webpack build runs the host from its own module without starting the app
   assert.equal(existsSync(join(derived, `${LOCATION}worker-2-h.js`)), false);
   const derivedRuntime = readFileSync(join(derived, `${LOCATION}lcu-webpack-runtime.cjs`), 'utf8');
   assert.equal(derivedRuntime, members[WEBPACK_ENTRY].replace('var o=r(99);module.exports=o', 'r.e(1);r.e(2);module.exports=r;'));
+});
+
+test('native end_turn and the host signal share cleanup before the original broker forgets the turn', async () => {
+  const calls = [];
+  const reply = Promise.withResolvers();
+  const secondReply = Promise.withResolvers();
+  const ids = { sessionId: 'session', turnId: 'turn' };
+  const options = { codexTurnMetadata: { session_id: 'session', turn_id: 'turn' } };
+  class Original {
+    request(method, params, incoming) {
+      calls.push({ method, params, incoming });
+      return params?.response?.promise ?? params;
+    }
+  }
+  const signal = attachTurnCleanup(Original, incoming => {
+    calls.push({ close: incoming });
+    return incoming.turnId === 'turn';
+  });
+  const transport = new WindowsHelperTransport();
+  assert.equal(await transport.request('list_windows', 'original', options), 'original');
+  assert.equal(calls[0].incoming, options);
+  const first = transport.request('end_turn', {response: reply}, options);
+  const second = transport.request('end_turn', {response: secondReply}, options);
+  const ending = signal(ids);
+  assert.equal(await signal({...ids, turnId: 'stale'}), false);
+  reply.resolve('first reply');
+  await Promise.resolve();
+  assert.deepEqual(calls.flatMap(call => call.close ? [call.close.turnId] : []), ['stale']);
+  secondReply.resolve('second reply');
+  assert.deepEqual(await Promise.all([first, second, ending]), ['first reply', 'second reply', true]);
+  assert.deepEqual(calls.flatMap(call => call.close ? [call.close.turnId] : []), ['stale', 'turn']);
+});
+
+test('a stuck native end_turn still closes its matched helper', async () => {
+  const reply = Promise.withResolvers();
+  const ids = { sessionId: 'session', turnId: 'turn' };
+  const closed = new Error('Original helper closed');
+  const signal = attachTurnCleanup(class { request() { return reply.promise; } }, incoming => {
+    assert.deepEqual(incoming, ids);
+    reply.reject(closed);
+    return true;
+  });
+  const request = new WindowsHelperTransport().request('end_turn', {}, {
+    codexTurnMetadata: { session_id: 'session', turn_id: 'turn' },
+  });
+  const rejected = assert.rejects(request, error => error === closed);
+  const abort = new AbortController();
+  try {
+    assert.equal(await Promise.race([signal(ids), delay(3000, false, {signal: abort.signal})]), true);
+    await rejected;
+  } finally { abort.abort(); }
 });
 
 test('webpack can reuse the default startServer without running the desktop wrapper', (t) => {

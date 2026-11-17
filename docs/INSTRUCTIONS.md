@@ -8,4 +8,6 @@ LCU registers no skill, matching the official plugin. Setup also removes the `lc
 
 The original launcher selects its dynamic instructions through `process.platform` and `CUA_REPL_ENABLED_SURFACES`. Default `lcu` selects the computer surface; `lcu --chrome` selects browser and computer, and the runtime then returns the original browser guidance. After context compaction, the original tool description tells the model to call `cua.rewriteDocumentation()`.
 
+In the Windows x64 guest with Store app `26.1111.2228.0`, the same native surface produced matching raw MCP tool schemas and descriptions, initialization instructions, and first `cua.getState()` text through the original launcher and installed LCU. See the [Windows comparison](verification/windows-store-2026-11-17.md#installed-windows-11-x64-desktop).
+
 Earlier LCU versions registered an LCU-authored `lcu` skill that required reading copied guides before the first call. Neither the skill nor that step has a counterpart in official Codex; in a 2026-10-01 benchmark, Codex with LCU spent its first action trying to open the skill file even after the reading step was removed. Both were removed. The source repository's historical `scripts/instructions.lock.json` records the original resources of the former full-bundle candidate; it is a historical baseline, not release payload.
