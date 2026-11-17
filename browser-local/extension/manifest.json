@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "LCU Local Browser",
+  "version": "1.0.0",
+  "description": "Connect LCU to approved tabs in this browser.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyxMhTZdCgUpDen4UzuyGlT5G2mI+QBEP+Z6/0TNBauBpXrlLSq0woCejVEMmSiwV6PIb0rz/3bo6nyNULmovad9GDKQ9VMIYjCVKPaQ9M7jThbmVrv9NbYySBvtCuWLJnhZSn6q2GY3rSquAvPZgPGyagilVYAqsYQG4/EAEcudZg9eEkOsJO/o/xTXdFH7N/9H8+/6GpQH7hCUIi3QLtbE5lxx927Czbp18/fYfJFRgN6hNuol7iQ5QBtd8tgsOKvwDxOGyRKLNxqxtaBK5MUF6lZBdPBx+uKegDbxKfdd9fjg28NURC55xKl5q/otkvJK03zWgfG+Dv8sgcpLP+QIDAQAB",
+  "permissions": ["debugger", "nativeMessaging", "scripting"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": { "service_worker": "worker.js", "type": "module" },
+  "action": { "default_title": "LCU Local Browser: connect" }
+}

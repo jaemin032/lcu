@@ -41,6 +41,8 @@ class WindowsBuildTests(unittest.TestCase):
                              'scripts/bundle.mjs', 'lcu/windows_host_analyze.cjs', 'lcu/vendor/acorn/acorn.js',
                              'lcu/claude_hook.mjs', 'lcu/claude_lifecycle.mjs',
                              'lcu/vendor/acorn/LICENSE',
+                             'browser-local/extension/manifest.json', 'browser-local/extension/worker.js',
+                             'browser-local/install.mjs', 'browser-local/transport.mjs', 'browser-local/mcp.mjs',
                              'scripts/windows_launcher.mjs', 'bundle.json',
                              'docs/verification/codex-interactive-2026-09-24.md'):
                     self.assertIn(prefix + name, names)

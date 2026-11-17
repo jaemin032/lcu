@@ -592,11 +592,21 @@ function report(root, selected, plugin, browser, run, known) {
   return enabled && connected;
 }
 
-const USAGE = 'Usage: lcu browser {install [--directory DIR] | status [--browser FAMILY]}';
+const localBrowser = process.platform === 'win32';
+const USAGE = 'Usage: lcu browser {install [--directory DIR] | status [--browser FAMILY]' +
+  (localBrowser ? ' | local-install [--agent codex]}' : '}');
 
 /** `lcu browser ARGV`; returns the exit status. */
 export async function main(root, argv) {
   const [action, ...rest] = argv;
+  if (['local-install', 'local-native', 'local-mcp'].includes(action)) {
+    if (!localBrowser) throw new Error('LCU Local Browser is available in the Windows x64 release.');
+    if (action === 'local-install' && ['-h', '--help'].includes(rest[0])) {
+      say('Usage: lcu browser local-install [--agent codex]');
+      return 0;
+    }
+    return (await import('../browser-local/install.mjs')).run(root, action, rest);
+  }
   if (action === 'serve' || action === 'protocol') {
     warn('lcu browser: the in-app browser host and codex:// protocol commands were removed; use the ' +
       'installed app browser. For external Chrome, run `lcu browser install` and enable the official ChatGPT extension.');
@@ -607,13 +617,15 @@ export async function main(root, argv) {
       '  install [--directory DIR]           Install the original native host for the current desktop account',
       '  status [--browser FAMILY]           Check extension and connector setup without changing the browser.',
       '                                      FAMILY is a browser the app\'s diagnostics list (chrome, edge, brave,',
-      '                                      opera, vivaldi); without it, reports each browser with the extension');
+      '                                      opera, vivaldi); without it, reports each browser with the extension',
+      ...(localBrowser ? ['  local-install [--agent codex]       Stage the LCU extension and register its native host.'] : []));
     return 0;
   }
   let values;
   try {
     if (!['install', 'status'].includes(action)) {
-      throw new Error(action === undefined ? 'Name an action: install or status.' : `Unknown action '${action}'; use install or status.`);
+      const actions = localBrowser ? 'install, status, or local-install' : 'install or status';
+      throw new Error(action === undefined ? `Name an action: ${actions}.` : `Unknown action '${action}'; use ${actions}.`);
     }
     const options = action === 'install' ? { directory: { type: 'string' } } : { browser: { type: 'string' } };
     ({ values } = parseArgs({ args: rest, options }));

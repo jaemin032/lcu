@@ -39,6 +39,10 @@ The old embedded-browser host, extraction script, protocol handler and renderer 
 
 The Windows webpack layout can also put the original pipe-host factory in the default for a `startServer` option inside desktop startup. The analyzer takes this factory and its module-scope dependencies without running desktop startup. See the [Store build verification record](verification/windows-store-2026-11-17.md).
 
+## Windows Local Browser extension
+
+The Windows archive includes the repository's Manifest V3 extension. `lcu browser local-install` stages those files and registers the extension's own native-messaging host for Chrome and Edge under the current account. The host and `lcu_local_browser` MCP server authenticate each other over a Windows named pipe. The MCP server uses the SDK's standard site-approval request. The extension operates on approved HTTP(S) tabs it opens for that connection and releases them on disconnect. It uses Chromium's scripting API for DOM actions and debugger API for screenshots. [Native messaging](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging) · [Chromium debugger API](https://developer.chrome.com/docs/extensions/reference/api/debugger).
+
 On Windows the original Window2 client can send `end_turn` as LCU signals the separate broker to close the active turn. The original broker forgets the ID after the native `end_turn` reply. The lifecycle adapter delegates that request to the installed helper transport and orders the original broker close before the broker forgets the matching ID. Simultaneous lifetime notifications share that cleanup. Runtimes that send no `end_turn` continue to use the broker's direct lifetime signal. See the [Windows guest comparison](verification/windows-store-2026-11-17.md#installed-windows-11-x64-desktop).
 
 ## macOS Unicode text input: reason and removal criterion

@@ -145,6 +145,7 @@ def build(output, package=None, *, target='linux', app=None):
         elif target == 'windows':
             # The pinned acorn parser the Windows host analyzer uses (see docs/PROVENANCE.md).
             shutil.copytree(SOURCE / 'lcu/vendor/acorn', release / 'lcu/vendor/acorn')
+            shutil.copytree(SOURCE / 'browser-local', release / 'browser-local')
         (release / 'docs').mkdir()
         for filename in SHIPPED_DOCS:
             shutil.copy2(SOURCE / 'docs' / filename, release / 'docs' / filename)
@@ -168,7 +169,8 @@ def build(output, package=None, *, target='linux', app=None):
         node = shutil.which('node')
         if node is None:
             raise ValueError('The build needs node on PATH to check the shipped modules.')
-        for module in sorted([*release.glob('lcu/*.mjs'), *release.glob('scripts/*.mjs')]):
+        for module in sorted([*release.glob('lcu/*.mjs'), *release.glob('scripts/*.mjs'),
+                              *release.glob('browser-local/*.mjs'), *release.glob('browser-local/extension/*.js')]):
             subprocess.run([node, '--check', str(module)], check=True, timeout=20)
         seal(release, arch, target)
         verify(release, arch, target)

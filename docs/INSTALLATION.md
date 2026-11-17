@@ -530,3 +530,15 @@ The installer reads the selected package version and CUA runtime, inventories th
 The default-prefix private copy, runtime-only installer, `--version`, and `doctor` passed in a clean Windows 11 guest. The installed candidate also enumerated windows, captured a screenshot, and saved Unicode text to an existing Notepad file; an independent file read matched the expected bytes. A later installed candidate verified matching Stop/Interrupt cleanup, stale-turn isolation, and helper exit at MCP shutdown. Candidate f completed project-scoped native setup for Codex CLI, Claude Code, and Pi; the generated Windows skill and Pi files were verified. Its opt-in Chrome path passed a scripted original-MCP action through the official extension, including exact-origin approval and an independently verified save. No Windows real-model session or automatic Chrome per-turn cleanup test ran. The final Windows archive build and seal audit passed. See the [Windows guest record](verification/windows-source.md) for exact results.
 
 The Node installer passed offline on Windows 11 x64 with Store app `26.1111.2228.0`. The installed runtime handled Window2 discovery, approval and refusal, screenshots, clicking, Unicode input, and cleanup after an active turn or MCP shutdown in a dedicated guest. An authenticated Codex model completed the same Unicode desktop task through the original `cua_repl` and LCU. It also completed a loopback form save through LCU's Chrome connector. See the [current Windows verification record](verification/windows-store-2026-11-17.md).
+
+### Install LCU Local Browser on Windows
+
+LCU Local Browser is included as source in the Windows x64 ZIP under `browser-local/extension`. Install LCU with the registered official desktop app, then stage the local extension and register its host for the current Windows account. The command below also registers `lcu_local_browser` in Codex. Omit `--agent codex` to configure another MCP client with the command `lcu browser local-mcp`.
+
+~~~powershell
+& "$env:LOCALAPPDATA\LCU\lcu.cmd" browser local-install --agent codex
+~~~
+
+Open `edge://extensions` or `chrome://extensions` in an installed browser. Enable Developer mode, choose **Load unpacked**, and select the `extension` folder printed by LCU. The installer copies that folder from the ZIP, so the extension can be loaded without network access. Click the extension icon if its badge displays `OFF`. Use one connected browser profile per Windows account. [Microsoft's local extension installation guide](https://learn.microsoft.com/en-us/microsoft-edge/extensions/getting-started/extension-sideloading).
+
+Restart Codex and ask it to use `lcu_local_browser`. It requests approval for each site origin, then can open a tab, read visible text and controls, enter text, click, and capture a screenshot. The browser session controls the tabs it opens and closes them when the MCP connection ends. Chrome's debugging indicator may appear during a screenshot. Follow browser or administrator restrictions on loading unpacked extensions.
